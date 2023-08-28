@@ -6,8 +6,8 @@ import argparse
 
 base_url = 'https://techpays.eu'
 
-def print_compensation(job_title, country_plus_job_title_url, output_file=''):
-    compensation_url = base_url + country_plus_job_title_url
+def print_compensation_for_seniority(job_title, country_plus_job_title_url, seniority, output_stream):
+    compensation_url = base_url + country_plus_job_title_url + '/' + seniority['url_addon']
 
     headers = {
             'Accept': 'application/json'
@@ -22,10 +22,6 @@ def print_compensation(job_title, country_plus_job_title_url, output_file=''):
     compensation_list = response.text[(list_start+len(list_key)+3): list_end+1]
     compensation_dict = json5.loads(compensation_list)
 
-    output = sys.stdout
-    if output_file:
-        output = open(output_file, "a")
-
     emoji_pattern = re.compile("["
             u"\U0001F600-\U0001F64F"  # emoticons
             u"\U0001F300-\U0001F5FF"  # symbols & pictographs
@@ -34,11 +30,23 @@ def print_compensation(job_title, country_plus_job_title_url, output_file=''):
                                "]+", flags=re.UNICODE)
 
     for compensation in compensation_dict:
+        print(emoji_pattern.sub(r'', job_title).strip() + '\t' + \
+        seniority['name'] + '\t' + \
+        emoji_pattern.sub(r'', compensation['companyName']).strip() + '\t' + \
+        emoji_pattern.sub(r'', compensation['title']).strip() + '\t' + \
+        compensation['totalCompensation'] + '\t' + \
+        str(compensation['totalCompensationNumber']) + '\t' + \
+        compensation['totalCompensationDetails'] + '\t' + \
+        compensation['baseSalary'] + '\t' + \
+        str(round(compensation['baseSalaryNumber']/12)).strip(), file=output_stream)
 
-        print(emoji_pattern.sub(r'', job_title).strip() + '\t' + emoji_pattern.sub(r'', compensation['companyName']).strip() + '\t' + \
-        emoji_pattern.sub(r'', compensation['title']).strip() + '\t' + compensation['totalCompensation'] + '\t' + \
-        str(compensation['totalCompensationNumber']) + '\t' + compensation['totalCompensationDetails'] + '\t' + \
-        compensation['baseSalary'] + '\t' + str(round(compensation['baseSalaryNumber']/12)).strip(), file=output)
+def print_compensation(job_title, country_plus_job_title_url, seniorities, output_file=''):
+    output = sys.stdout
+    if output_file:
+        output = open(output_file, "a")
+
+    for seniority in seniorities:
+        print_compensation_for_seniority(job_title, country_plus_job_title_url, seniority, output)
 
     if output is not sys.stdout:
         output.close()
@@ -124,6 +132,49 @@ def list_jobs(country_url):
 
     return jobs
 
+def list_seniority_levels(country_url):
+    request_url = base_url + country_url
+
+    headers = {
+            'Accept': 'application/json'
+    }
+
+    response = requests.request('GET', request_url, headers=headers)
+
+    menu_start_key = 'id="seniorityFilterOptions"'
+    menu_end_key_reg = r'</div>\s*</div>'
+
+    seniority_start_key = '<a href="'
+    seniority_end_key = '"'
+    seniority_name_html_element = 'a'
+
+    seniorities = []
+
+    list_start = response.text.index(menu_start_key)
+    list_end = re.search(menu_end_key_reg, response.text[list_start:]).start()
+    seniority_list_html = response.text[list_start: list_start+list_end]
+
+    has_seniorities = True
+    while has_seniorities:
+        try:
+            seniority_url_start = seniority_list_html.index(seniority_start_key)
+        except:
+            break
+
+        seniority_url_end = seniority_list_html.index(seniority_end_key, seniority_url_start+len(seniority_start_key))
+        seniority_url = seniority_list_html[seniority_url_start+len(seniority_start_key): seniority_url_end]
+        seniority_url_pieces = seniority_url.split('/')
+        seniority_url_addon = seniority_url_pieces[-1]
+
+        seniority_name_start = seniority_list_html.index('>', seniority_url_end+1)+1
+        seniority_name_end = seniority_list_html.index('</' + seniority_name_html_element, seniority_name_start)
+        seniority_name = seniority_list_html[seniority_name_start: seniority_name_end].strip()
+        seniority_name = re.sub('&\w+;', '', seniority_name)
+
+        seniorities.append({'name': seniority_name, 'url_addon': seniority_url_addon})
+        seniority_list_html = seniority_list_html[seniority_name_end+1:]
+
+    return seniorities
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='List compensation from techpays.eu. When no command line options are provided these are interactively requested.')
@@ -151,13 +202,14 @@ if __name__ == "__main__":
         print('')
 
     jobs = list_jobs(countries[selected_country_index]['url'])
+    seniorities = list_seniority_levels(countries[selected_country_index]['url'])
 
     if args.name:
         job_names = args.name.split(',')
         for job_name in job_names:
             for job in jobs:
                 if job['name'].lower().find(job_name.strip().lower()) >= 0:
-                    print_compensation(job['name'], job['url'], args.output)
+                    print_compensation(job['name'], job['url'], seniorities, args.output)
     else:
         for job in jobs:
             print('[' + str(jobs.index(job)+1) + '] ' + job['name'] + ' ' + job['url'])
@@ -167,4 +219,4 @@ if __name__ == "__main__":
             print('Invalid job index')
             sys.exit(0)
 
-        print_compensation(jobs[selected_job_index]['name'], jobs[selected_job_index]['url'], args.output)
+        print_compensation(jobs[selected_job_index]['name'], jobs[selected_job_index]['url'], seniorities, args.output)
