@@ -6,7 +6,7 @@ import argparse
 
 base_url = 'https://techpays.eu'
 
-def print_compensation(country_plus_job_title_url, output_file=''):
+def print_compensation(job_title, country_plus_job_title_url, output_file=''):
     compensation_url = base_url + country_plus_job_title_url
 
     headers = {
@@ -35,7 +35,7 @@ def print_compensation(country_plus_job_title_url, output_file=''):
 
     for compensation in compensation_dict:
 
-        print(emoji_pattern.sub(r'', compensation['companyName']).strip() + '\t' + \
+        print(emoji_pattern.sub(r'', job_title).strip() + '\t' + emoji_pattern.sub(r'', compensation['companyName']).strip() + '\t' + \
         emoji_pattern.sub(r'', compensation['title']).strip() + '\t' + compensation['totalCompensation'] + '\t' + \
         str(compensation['totalCompensationNumber']) + '\t' + compensation['totalCompensationDetails'] + '\t' + \
         compensation['baseSalary'] + '\t' + str(round(compensation['baseSalaryNumber']/12)).strip(), file=output)
@@ -157,7 +157,7 @@ if __name__ == "__main__":
         for job_name in job_names:
             for job in jobs:
                 if job['name'].lower().find(job_name.strip().lower()) >= 0:
-                    print_compensation(job['url'], args.output)
+                    print_compensation(job['name'], job['url'], args.output)
     else:
         for job in jobs:
             print('[' + str(jobs.index(job)+1) + '] ' + job['name'] + ' ' + job['url'])
@@ -167,4 +167,4 @@ if __name__ == "__main__":
             print('Invalid job index')
             sys.exit(0)
 
-        print_compensation(jobs[selected_job_index]['url'], args.output)
+        print_compensation(jobs[selected_job_index]['name'], jobs[selected_job_index]['url'], args.output)
