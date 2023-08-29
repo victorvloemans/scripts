@@ -3,10 +3,11 @@ import json5
 import re
 import sys
 import argparse
+import os
 
 base_url = 'https://techpays.eu'
 
-def print_compensation_for_seniority(job_title, country_plus_job_title_url, seniority, output_stream):
+def print_compensation_for_seniority(job_title, country_plus_job_title_url, seniority, output_stream, print_column_headers = True):
     compensation_url = base_url + country_plus_job_title_url + '/' + seniority['url_addon']
 
     headers = {
@@ -29,7 +30,27 @@ def print_compensation_for_seniority(job_title, country_plus_job_title_url, seni
             u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
                                "]+", flags=re.UNICODE)
 
+    additional_compensations = ['Equity', 'Bonus', 'Benefits', 'Relocation', 'Sign-on']
+    header_suffix = ''
+    for additional_compensation in additional_compensations:
+        header_suffix += '\t' + additional_compensation
+
+    if print_column_headers:
+        print('Job family\tSeniority\tCompany\tJob title\tAnnual compensation\tAnn Comp\tCompensation details\tMonthly salary\tMonth sal'+header_suffix, file=output_stream)
+
     for compensation in compensation_dict:
+        comp_details = compensation['totalCompensationDetails'].split(',')
+        print_suffix = ''
+        for additional_compensation in additional_compensations:
+            number = 0
+            for comp_detail in comp_details:
+                try:
+                    if comp_detail.lower().index(additional_compensation.lower()) >= 0:
+                        number = re.search('\d+', comp_detail).group()
+                except:
+                    pass
+            print_suffix += '\t' + str(number)
+
         print(emoji_pattern.sub(r'', job_title).strip() + '\t' + \
         seniority['name'] + '\t' + \
         emoji_pattern.sub(r'', compensation['companyName']).strip() + '\t' + \
@@ -38,15 +59,22 @@ def print_compensation_for_seniority(job_title, country_plus_job_title_url, seni
         str(compensation['totalCompensationNumber']) + '\t' + \
         compensation['totalCompensationDetails'] + '\t' + \
         compensation['baseSalary'] + '\t' + \
-        str(round(compensation['baseSalaryNumber']/12)).strip(), file=output_stream)
+        str(round(compensation['baseSalaryNumber']/12)).strip() + \
+        print_suffix, file=output_stream)
 
-def print_compensation(job_title, country_plus_job_title_url, seniorities, output_file=''):
+def print_compensation(job_title, country_plus_job_title_url, seniorities, output_file='', is_first = True):
     output = sys.stdout
+    print_column_headers = is_first
+
     if output_file:
+        if os.path.exists(output_file):
+            print_column_headers = False
+
         output = open(output_file, "a")
 
     for seniority in seniorities:
-        print_compensation_for_seniority(job_title, country_plus_job_title_url, seniority, output)
+        print_compensation_for_seniority(job_title, country_plus_job_title_url, seniority, output, print_column_headers)
+        print_column_headers = False
 
     if output is not sys.stdout:
         output.close()
@@ -209,7 +237,7 @@ if __name__ == "__main__":
         for job_name in job_names:
             for job in jobs:
                 if job['name'].lower().find(job_name.strip().lower()) >= 0:
-                    print_compensation(job['name'], job['url'], seniorities, args.output)
+                    print_compensation(job['name'], job['url'], seniorities, args.output, job_names.index(job_name)==0)
     else:
         for job in jobs:
             print('[' + str(jobs.index(job)+1) + '] ' + job['name'] + ' ' + job['url'])
